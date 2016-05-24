@@ -25,6 +25,7 @@ import time
 from sensor_calcs import *
 import json
 import select
+import traceback
 
 def floatfromhex(h):
     t = float.fromhex(h)
@@ -37,11 +38,17 @@ class SensorTag:
 
     def __init__( self, bluetooth_adr ):
         self.con = pexpect.spawn('gatttool -b ' + bluetooth_adr + ' --interactive')
-        self.con.expect('\[LE\]>', timeout=600)
+        self.con.expect('\[LE\]>')
+        print self.con.before
+        print self.con.after
         print "Preparing to connect. You might need to press the side button..."
-        self.con.sendline('connect')
+        result = self.con.sendline('connect')
+        print result
         # test for success of connect
-	self.con.expect('Connection successful.*\[LE\]>')
+	result = self.con.expect('Connection successful.*\[LE\]>')
+        print result
+        print self.con.before
+        print self.con.after
         # Earlier versions of gatttool returned a different message.  Use this pattern -
         #self.con.expect('\[CON\].*>')
         self.cb = {}
@@ -69,23 +76,19 @@ class SensorTag:
     def notification_loop( self ):
         while True:
 	    try:
-              pnum = self.con.expect('Notification handle = .*? \r', timeout=4)
-            except pexpect.TIMEOUT:
+              v=self.char_read_hnd(0x21)
+	      #objT = (v[1]<<8)+v[0]
+              ambT = (v[3]<<8)+v[2]
+	      ambT = tosigned(ambT)
+              c_tmpAmb = ambT/128.0
+	      f_tmpAmb = 9.0/5.0 * c_tmpAmb + 32
+              #targetT = calcTmpTarget(objT, ambT)
+              #self.data['t006'] = targetT
+              print "T006 %.1f" % c_tmpAmb            
+              print "T006 %.1f" % f_tmpAmb            
+	    except pexpect.TIMEOUT:
               print "TIMEOUT exception!"
               break
-	    if pnum==0:
-                after = self.con.after
-	        hxstr = after.split()[3:]
-            	handle = long(float.fromhex(hxstr[0]))
-            	#try:
-	        if True:
-                  self.cb[handle]([long(float.fromhex(n)) for n in hxstr[2:]])
-            	#except:
-                #  print "Error in callback for %x" % handle
-                #  print sys.argv[1]
-                pass
-            else:
-              print "TIMEOUT!!"
         pass
 
     def register_cb( self, handle, fn ):
@@ -106,7 +109,7 @@ class SensorCallbacks:
         objT = (v[1]<<8)+v[0]
         ambT = (v[3]<<8)+v[2]
         targetT = calcTmpTarget(objT, ambT)
-        self.data['t006'] = targetT
+        #self.data['t006'] = targetT
         print "T006 %.1f" % targetT
 
     def accel(self,v):
@@ -162,45 +165,20 @@ def main():
       print "[re]starting.."
 
       tag = SensorTag(bluetooth_adr)
+      print "callback initialization"
       cbs = SensorCallbacks(bluetooth_adr)
+      print "cbs: "
+      print cbs
 
       # enable TMP006 sensor
-      tag.register_cb(0x25,cbs.tmp006)
-      tag.char_write_cmd(0x29,0x01)
-      tag.char_write_cmd(0x26,0x0100)
-
-      # enable accelerometer
-      tag.register_cb(0x2d,cbs.accel)
-      tag.char_write_cmd(0x31,0x01)
-      tag.char_write_cmd(0x2e,0x0100)
-
-      # enable humidity
-      tag.register_cb(0x38, cbs.humidity)
-      tag.char_write_cmd(0x3c,0x01)
-      tag.char_write_cmd(0x39,0x0100)
-
-      # enable magnetometer
-      tag.register_cb(0x40,cbs.magnet)
-      tag.char_write_cmd(0x44,0x01)
-      tag.char_write_cmd(0x41,0x0100)
-
-      # enable gyroscope
-      tag.register_cb(0x57,cbs.gyro)
-      tag.char_write_cmd(0x5b,0x07)
-      tag.char_write_cmd(0x58,0x0100)
-
-      # fetch barometer calibration
-      tag.char_write_cmd(0x4f,0x02)
-      rawcal = tag.char_read_hnd(0x52)
-      barometer = Barometer( rawcal )
-      # enable barometer
-      tag.register_cb(0x4b,cbs.baro)
-      tag.char_write_cmd(0x4f,0x01)
-      tag.char_write_cmd(0x4c,0x0100)
-
+      #tag.register_cb(0x25,cbs.tmp006)
+      tag.char_write_cmd(0x24,0x01)
+      #tag.char_write_cmd(0x26,0x0100)
       tag.notification_loop()
      except:
-      pass
+      traceback.print_exc(file=sys.stdout)
+      sys.exit()
+      #pass
 
 if __name__ == "__main__":
     main()
