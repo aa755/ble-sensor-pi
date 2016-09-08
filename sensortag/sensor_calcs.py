@@ -22,6 +22,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import time
 
 tosigned = lambda n: float(n-0x10000) if n>0x7fff else float(n)
 tosignedbyte = lambda n: float(n-0x100) if n>0x7f else float(n)
