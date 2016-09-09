@@ -21,7 +21,7 @@
 
 # CC2650 SensorTag attribute table
 # 
-#http://e2e.ti.com/cfs-file/__key/communityserver-discussions-components-files/538/attr_5F00_cc2650-sensortag.html
+# http://e2e.ti.com/cfs-file/__key/communityserver-discussions-components-files/538/attr_5F00_cc2650-sensortag.html
 # TI Base UUID: F000XXXX-0451-4000-B000-000000000000. 128 bit UUIDs are typed 'bold blue'
 # 
 # Handle
@@ -188,26 +188,28 @@ class SensorTag:
         rval = after.split()[1:]
         return [long(float.fromhex(n)) for n in rval]
 
-    # Notification handle = 0x0025 value: 9b ff 54 07
+    # misnamed : no notifications. just polling.
     def notification_loop(self):
         while True:
-	    try:
-            v = self.char_read_hnd(0x21)
-	      # objT = (v[1]<<8)+v[0]
-            ambT = (v[3] << 8) + v[2]
-	        ambT = tosigned(ambT)
-            c_tmpAmb = ambT / 128.0
-	        f_tmpAmb = 9.0 / 5.0 * c_tmpAmb + 32
-              # targetT = calcTmpTarget(objT, ambT)
+            try:
+                v = self.char_read_hnd(0x21)
+	            # objT = (v[1]<<8)+v[0]
+                ambT = (v[3] << 8) + v[2]
+                ambT = tosigned(ambT)
+                c_tmpAmb = ambT / 128.0
+                f_tmpAmb = 9.0 / 5.0 * c_tmpAmb + 32
+                # targetT = calcTmpTarget(objT, ambT)
               # self.data['t006'] = targetT
               # print "T006 %.1f" % c_tmpAmb            
-	                  
-            print "%s -- %.1f" % (time.strftime('%l:%M:%S%p %Z on %b %d, %Y'), f_tmpAmb)
-	        time.sleep(10)  # sleep for 1 minute
-	    except pexpect.TIMEOUT:
-            print "TIMEOUT exception!"
-            break
-        pass
+                v = self.char_read_hnd(0x29)
+                rawT = (v[1] << 8) + v[0]
+                rawH = (v[3] << 8) + v[2]
+                (t, rh) = calcHum(rawT, rawH)
+                print "%s -- %.1f %.1f" % (time.strftime('%l:%M:%S%p %Z on %b %d, %Y'), f_tmpAmb, rh)
+                time.sleep(10)  # sleep for 1 minute
+            except pexpect.TIMEOUT:
+                print "TIMEOUT exception!"
+                break
 
     def register_cb(self, handle, fn):
         self.cb[handle] = fn;
@@ -220,8 +222,12 @@ def main():
     global datalog
     global barometer
 
-    bluetooth_adr = sys.argv[1]
+    if len(sys.argv) > 2:
+        bluetooth_adr = sys.argv[1]
+    else:
+        bluetooth_adr = "A0:E6:F8:AE:3B:86"
     # data['addr'] = bluetooth_adr
+    
     if len(sys.argv) > 2:
         datalog = open(sys.argv[2], 'w+')
 
@@ -234,6 +240,8 @@ def main():
       # enable TMP006 sensor
       # tag.register_cb(0x25,cbs.tmp006)
       tag.char_write_cmd(0x24, 0x01)
+      # enable humidity sensor
+      tag.char_write_cmd(0x2C, 0x01)
       
       time.sleep(20)  # give the sensor some time. otherwise initial values are garbage
       # tag.char_write_cmd(0x26,0x0100)
