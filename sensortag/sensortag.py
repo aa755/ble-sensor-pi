@@ -143,6 +143,7 @@ import json
 import select
 import traceback
 import homeassistant.remote as remote
+from myconfig import *
 
 def floatfromhex(h):
     #print(h)
@@ -194,7 +195,7 @@ class SensorTag:
 
     # misnamed : no notifications. just polling.
     def notification_loop(self):
-        api = remote.API('brixpro.lan', 'enter-home-assistant-password-here')
+        api = remote.API('brixpro.lan', haPass)
         while True:
             try:
                 v = self.char_read_hnd(0x21)
@@ -203,7 +204,7 @@ class SensorTag:
                 ambT = tosigned(ambT)
                 c_tmpAmb = ambT / 128.0
                 f_tmpAmb = 9.0 / 5.0 * c_tmpAmb + 32
-                remote.set_state(api, 'sensor.bedroom_temp', new_state=f_tmpAmb)
+                remote.set_state(api, 'sensor.bedroom_temp', new_state=f_tmpAmb, attributes={'unit_of_measurement': '°F'})
                 # targetT = calcTmpTarget(objT, ambT)
               # self.data['t006'] = targetT
               # print "T006 %.1f" % c_tmpAmb            
@@ -211,9 +212,9 @@ class SensorTag:
                 rawT = (v[1] << 8) + v[0]
                 rawH = (v[3] << 8) + v[2]
                 (t, rh) = calcHum(rawT, rawH)
-                remote.set_state(api, 'sensor.bedroom_humidity', new_state=rh)
+                remote.set_state(api, 'sensor.bedroom_humidity', new_state=rh, attributes={'unit_of_measurement': '%'})
                 #print ("%s -- %.1f %.1f" % (time.strftime('%l:%M:%S%p %Z on %b %d, %Y'), f_tmpAmb, rh))
-                time.sleep(5) # save battery on sensortag? 
+                time.sleep(120) # save battery on sensortag? 
             except pexpect.TIMEOUT:
                 print ("TIMEOUT exception!")
                 break
@@ -249,7 +250,7 @@ def main():
       # enable humidity sensor
       tag.char_write_cmd(0x2C, 0x01)
       
-      time.sleep(5)  # give the sensor some time. otherwise initial values are garbage
+      time.sleep(120)  # give the sensor some time. otherwise initial values are garbage
       # tag.char_write_cmd(0x26,0x0100)
       tag.notification_loop()
      except:
